@@ -6,6 +6,7 @@
 #include <numeric>
 
 #define HEIGHT 1.65
+#define NUM_FRAMES 200
 
 using namespace Eigen;
 using namespace std;
@@ -74,12 +75,13 @@ typedef map<long, map<int, int> > CellAssign;
 
 int main(){
     const int size = 1000;
-    const int ysize = 4000;
+    const int ysize = 2000;
     const float resolution = 0.1;
     const float  minX = -50;
     const float  minY = -50;
 
     string labelDir = "/home/cy/Desktop/Kitti_segmented/resize/results/";
+    string imgDir = "/ext/data/odometry/dataset/sequences/04/image_2/";
 
     ifstream pose_file;
     pose_file.open("/ext/data/odometry/dataset/poses/04.txt");
@@ -95,6 +97,7 @@ int main(){
     int frameNum = 0;
 
     map<pair<int, int>, CellAssign> patchMapping;
+    map<pair<int, int>, CellAssign> grayPatchMapping;
 
     while (hasPose) {
         MatrixXf pose(3,4);
@@ -102,11 +105,14 @@ int main(){
         cout << pose << endl << "------------" << endl;
 
         int pad = 6 - to_string(frameNum).length();
-        stringstream filename;
+        stringstream filename, orgFilename;
         filename << labelDir << string(pad, '0') << frameNum << ".png";
+        orgFilename << imgDir << string(pad, '0') << frameNum << ".png";
+
         cout << "Opening filename" << filename.str() << endl;
 
         cv::Mat img = cv::imread(filename.str(), CV_LOAD_IMAGE_GRAYSCALE);
+        cv::Mat orgImg = cv::imread(orgFilename.str(), CV_LOAD_IMAGE_GRAYSCALE);
         cv::Size shape = img.size();
 
         //cout << (int)img.at<uchar>(322, 758) << endl;
@@ -114,9 +120,11 @@ int main(){
         for (int row = 0; row < shape.height; row++){
             for (int col = 0; col < shape.width; col++){
                 uint8_t label = img.at<uchar>(row, col);
+                uint8_t grayColor = orgImg.at<uchar>(row, col);
 
 //                if (label == 24){
-                if (row > 300 && label==24){
+//                if (row > 300 && label==24){
+                if  (row > 300){
                     //convert u,v coordinate to world coordinate
                     VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
 
@@ -133,14 +141,21 @@ int main(){
                         continue;
                     }
 
+                    int blabel = (label ==24)?1:0;
+
                     pair<int, int> gp = {patchX, patchY};
-                    long cellId = cellX * size + cellY;
+                    long cellId = cellY * size + cellX;
 
                     patchMapping.insert({gp, CellAssign()});
                     patchMapping[gp].insert({cellId, map<int, int>()});
-                    patchMapping[gp][cellId].insert({(int)label, 0});
+                    patchMapping[gp][cellId].insert({blabel, 0});
 
-                    patchMapping[gp][cellId][label]++;
+                    grayPatchMapping.insert({gp, CellAssign()});
+                    grayPatchMapping[gp].insert({cellId, map<int, int>()});
+                    grayPatchMapping[gp][cellId].insert({blabel, 0});
+
+                    patchMapping[gp][cellId][blabel]++;
+                    grayPatchMapping[gp][cellId][grayColor]++;
 
                 }
             }
@@ -149,49 +164,86 @@ int main(){
 
         //TODO: remove this
         frameNum++;
-        if (frameNum > 40)
+        if (frameNum > NUM_FRAMES)
             break;
     }
 
-    for (const auto &it: patchMapping){
+    for (auto &it: patchMapping){
         int x = it.first.first;
         int y = it.first.second;
-        const CellAssign &ca = it.second;
+        CellAssign &ca = it.second;
+        CellAssign &grayCa = grayPatchMapping[it.first];
 
-        cv::Mat mapArea = cv::Mat::zeros(ysize, size, CV_8UC1);
+        cv::Mat mapArea = cv::Mat::zeros(ysize, size, CV_8UC3);
+//        cv::Mat grayMapArea = cv::Mat::zeros(ysize, size, CV_8UC1);
 
+        cout << mapArea.rows <<  " " << mapArea.cols << mapArea.channels() << endl;
         int maxPts = 0;
 
-        for (const auto &it2: ca){
+        for (auto &it2: grayCa){
             long cellId = it2.first;
-            const map<int, int> &pointMap = it2.second;
+            map<int, int> &pointMap = it2.second;
 
             int cellX = cellId % size;
             int cellY = cellId / size;
 
-            int maxLabel = -1;
-            int maxCount = -1;
-
-            for(auto &maxIter: pointMap){
-                if (maxCount < maxIter.second){
-                    maxCount = maxIter.second;
-                    maxLabel = maxIter.first;
-                }
+            int total = 0;
+            int cnt = 0;
+            for (auto &it3: pointMap){
+                total += it3.first * it3.second;
+                cnt += it3.second;
             }
 
-            //uint8_t label = points[points.size()-1];
-            if (maxLabel == 24) {
-                mapArea.at<uchar>(cellX, cellY) = 255;
-            } else {
-                mapArea.at<uchar>(cellX, cellY) = 128;
-            }
+            float avg = total*1./cnt;
+            mapArea.at<cv::Vec3b>(cellY, cellX)[0] = avg;
+//                    maxLabel = maxIter.first;
+//                }
+//            }
+//
+//            //uint8_t label = points[points.size()-1];
+//            if (maxLabel == 24) {
+//                mapArea.at<uchar>(cellX, cellY) = 255;
+//            } else {
+//                mapArea.at<uchar>(cellX, cellY) = 128;
+//            }
         }
 
-        stringstream filename;
+        for (auto &it2: ca){
+            long cellId = it2.first;
+            map<int, int> &pointMap = it2.second;
+
+            int cellX = cellId % size;
+            int cellY = cellId / size;
+
+            float avg = pointMap[1]*1. / (pointMap[0] + pointMap[1]);
+            mapArea.at<cv::Vec3b>(cellY, cellX)[1] = (uchar)(avg * 255);
+
+//            int maxLabel = -1;
+//            int maxCount = -1;
+//
+//            for(auto &maxIter: pointMap){
+//                if (maxCount < maxIter.second){
+//                    maxCount = maxIter.second;
+//                    maxLabel = maxIter.first;
+//                }
+//            }
+//
+//            //uint8_t label = points[points.size()-1];
+//            if (maxLabel == 24) {
+//                mapArea.at<uchar>(cellX, cellY) = 255;
+//            } else {
+//                mapArea.at<uchar>(cellX, cellY) = 128;
+//            }
+        }
+
+        stringstream filename, gfilename;
 
         filename << "/home/cy/Desktop/x_" << x << "_y_" << y << ".png";
+//        gfilename << "/home/cy/Desktop/g_x_" << x << "_y_" << y << ".png";
         cv::Mat mapAreaF = cv::Mat::zeros(ysize, size, CV_8UC1);
+//        cv::Mat gMapAreaF = cv::Mat::zeros(ysize, size, CV_8UC1);
         cv::flip(mapArea, mapAreaF, 0);
+//        cv::flip(grayMapArea, gMapAreaF, 0);
         cv::imwrite(filename.str(), mapAreaF);
     }
 
