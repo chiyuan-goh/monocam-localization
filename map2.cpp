@@ -5,37 +5,14 @@
 #include <map>
 #include <numeric>
 
-#define HEIGHT 1.65
-#define NUM_FRAMES 200
+#include "util.h"
+
+
 
 using namespace Eigen;
 using namespace std;
 
-bool nextPose(ifstream &f, Eigen::MatrixXf& pose){
-    bool hasPose = false;
-
-    if(f.peek() != EOF) {
-        hasPose = true;
-        for (int i = 0; i < 12; ++i) {
-            float v;
-            f >> v;
-            int y = i / 4;
-            int x = i % 4;
-            pose(y, x) = v;
-        }
-    }
-    return hasPose;
-}
-
-MatrixXf getPMatrix(const string& filename){
-    MatrixXf P(3, 4);
-    P << 7.070912000000e+02, 0.000000000000e+00,  6.018873000000e+02, 4.688783000000e+01,
-        0.000000000000e+00, 7.070912000000e+02, 1.831104000000e+02, 1.178601000000e-01,
-        0.000000000000e+00, 0.000000000000e+00, 1.000000000000e+00, 6.203223000000e-03;
-    return P;
-}
-
-
+//Don't use this
 VectorXf imageToWorldPoints(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
     Matrix4f pose2 = Matrix4f::Zero();
     pose2.topLeftCorner<3, 4>() = pose;
@@ -75,22 +52,19 @@ typedef map<long, map<int, int> > CellAssign;
 
 int main(){
     const int size = 1000;
-    const int ysize = 2000;
+    const int ysize = 4000;
     const float resolution = 0.1;
     const float  minX = -50;
     const float  minY = -50;
 
-    string labelDir = "/home/cy/Desktop/Kitti_segmented/resize/results/";
-    string imgDir = "/ext/data/odometry/dataset/sequences/04/image_2/";
-
     ifstream pose_file;
-    pose_file.open("/ext/data/odometry/dataset/poses/04.txt");
+    pose_file.open(posePath);
 
     if (!pose_file){
         cerr << "Cannot open pose file" << endl;
     }
 
-    MatrixXf proj = getPMatrix("/ext/data/odometry/dataset/sequences/04/calib.txt") ;
+    MatrixXf proj = getPMatrix() ;
 //    cout << proj << endl;
 
     bool hasPose = true;
