@@ -41,7 +41,6 @@ VectorXf imageToWorldPoints(float u, float v, const MatrixXf& pose, const Matrix
     pose2(3, 3) = 1;
     MatrixXf pose3 = pose2.inverse();
 
-
     Vector3f imagePoint(u, v, 1);
 
     MatrixXf R = pose3.topLeftCorner<3,3>();
@@ -50,17 +49,32 @@ VectorXf imageToWorldPoints(float u, float v, const MatrixXf& pose, const Matrix
     MatrixXf lMatrix = R.inverse() * proj.topLeftCorner<3,3>().inverse() * imagePoint;
     MatrixXf rMatrix = R.inverse() * t;
 
-    float s = (HEIGHT + rMatrix(1, 0)) / lMatrix(1, 0);
+//    cout << pose(1,3) << endl;
+    float s = (HEIGHT + pose(1, 3) + rMatrix(1, 0)) / lMatrix(1, 0);
     VectorXf realWorld = R.inverse() * (s * proj.topLeftCorner<3,3>().inverse() * imagePoint - t);
 
     return realWorld;
 }
 
 
-typedef map<long, vector<uint8_t> > CellAssign;
+VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
+    Vector3f imagePoint(u, v, 1);
+    MatrixXf Kinv = proj.topLeftCorner<3,3>().inverse();
+    Vector3f L = Kinv * imagePoint;
+    double s =  HEIGHT / L(1);
+
+    Vector3f camPoint = s * Kinv * imagePoint;
+    Vector4f homoCam  = Vector4f::Ones();
+    homoCam.head(3) = camPoint;
+    Vector3f worldPoint = pose * homoCam;
+    return worldPoint;
+}
+
+typedef map<long, map<int, int> > CellAssign;
 
 int main(){
     const int size = 1000;
+    const int ysize = 4000;
     const float resolution = 0.1;
     const float  minX = -50;
     const float  minY = -50;
@@ -102,14 +116,15 @@ int main(){
                 uint8_t label = img.at<uchar>(row, col);
 
 //                if (label == 24){
+                if (row > 300 && label==24){
                     //convert u,v coordinate to world coordinate
-                    VectorXf realWorld = imageToWorldPoints(col, row, pose, proj);
+                    VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
 
                     //calculate which cell inside map
                     int patchX = realWorld(0) / (resolution * size);
-                    int patchY = realWorld(2) / (resolution * size);
+                    int patchY = realWorld(2) / (resolution * ysize);
                     int cellX = fmod(realWorld(0), resolution * size) / resolution;
-                    int cellY = fmod(realWorld(2), resolution * size) / resolution;
+                    int cellY = fmod(realWorld(2), resolution * ysize) / resolution;
                     cellX =(500 + cellX) % size;
 //                    cellY =(500 + cellY) % size;
 
@@ -122,17 +137,19 @@ int main(){
                     long cellId = cellX * size + cellY;
 
                     patchMapping.insert({gp, CellAssign()});
-                    patchMapping[gp].insert({cellId, vector<uint8_t>()});
-                    patchMapping[gp][cellId].push_back(label);
+                    patchMapping[gp].insert({cellId, map<int, int>()});
+                    patchMapping[gp][cellId].insert({(int)label, 0});
 
-//                }
+                    patchMapping[gp][cellId][label]++;
+
+                }
             }
         }
 
 
         //TODO: remove this
         frameNum++;
-        if (frameNum > 1)
+        if (frameNum > 40)
             break;
     }
 
@@ -141,26 +158,29 @@ int main(){
         int y = it.first.second;
         const CellAssign &ca = it.second;
 
-        cv::Mat mapArea = cv::Mat::zeros(size, size, CV_8UC1);
+        cv::Mat mapArea = cv::Mat::zeros(ysize, size, CV_8UC1);
 
         int maxPts = 0;
-        for (const auto &it2: ca){
-            const vector<uint8_t> &points = it2.second;
-            if (points.size() > maxPts){
-                maxPts = points.size();
-            }
-        }
-
 
         for (const auto &it2: ca){
             long cellId = it2.first;
-            const vector<uint8_t> &points = it2.second;
+            const map<int, int> &pointMap = it2.second;
 
             int cellX = cellId % size;
             int cellY = cellId / size;
 
-            uint8_t label = points[points.size()-1];
-            if (label == 24) {
+            int maxLabel = -1;
+            int maxCount = -1;
+
+            for(auto &maxIter: pointMap){
+                if (maxCount < maxIter.second){
+                    maxCount = maxIter.second;
+                    maxLabel = maxIter.first;
+                }
+            }
+
+            //uint8_t label = points[points.size()-1];
+            if (maxLabel == 24) {
                 mapArea.at<uchar>(cellX, cellY) = 255;
             } else {
                 mapArea.at<uchar>(cellX, cellY) = 128;
@@ -169,8 +189,8 @@ int main(){
 
         stringstream filename;
 
-        filename << "/home/cy/Desktop/x" << x << "_y_" << y << ".png";
-        cv::Mat mapAreaF = cv::Mat::zeros(size, size, CV_8UC1);
+        filename << "/home/cy/Desktop/x_" << x << "_y_" << y << ".png";
+        cv::Mat mapAreaF = cv::Mat::zeros(ysize, size, CV_8UC1);
         cv::flip(mapArea, mapAreaF, 0);
         cv::imwrite(filename.str(), mapAreaF);
     }
