@@ -20,7 +20,7 @@ add_executable(localize run_visualize.cpp util.cpp)
 add_executable(test1 test.cpp util.cpp)
 
 target_link_libraries(mapgen ${OpenCV_LIBS})
-target_link_libraries(mk_map2 ${OpenCV_LIBS})
+target_link_libraries(mk_map2 ${OpenCV_LIBS} ${PCL_LIBRARIES})
 target_link_libraries(localize ${OpenCV_LIBS})
 target_link_libraries(test1 ${PCL_LIBRARIES})
 

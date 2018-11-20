@@ -55,11 +55,11 @@ int main(){
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZRGB>),
                             globalPose(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-    pcl::transformPointCloud(*ptr, *globalPose, Kitti::getVelodyneToCam());
+    pcl::transformPointCloud(*ptr, *ptr, Kitti::getVelodyneToCam());
     float tol = 0.9;
     for (int i = 0; i < outputNorm->points.size(); ++i){
         pcl::Normal &opNorm = outputNorm->points[i];
-        if (fabs(opNorm.normal_z) >= tol && globalPose->points[i].y >= 1.35){
+        if (fabs(opNorm.normal_z) >= tol && ptr->points[i].y >= 1.35){
             filterNorm->push_back(outputNorm->points[i]);
             filtered->push_back(ptr->points[i]);
         }

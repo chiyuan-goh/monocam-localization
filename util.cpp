@@ -79,15 +79,54 @@ bool Kitti::readBinary(string filename, vector<MPoint> &points){
         float* tofloat = (float*)memblock;
 
         int numPoints  = size / (4 * sizeof(float));
-        cout << "number of points:" << numPoints << endl;
+//        cout << "number of points:" << numPoints << endl;
         for (int i = 0; i < numPoints; i++){
 //            std::cout << "point: " << tofloat[i * 4] << " " << tofloat[i*4+1] << " " << tofloat[i*4+2] << " " <<  tofloat[i*4+3] << std::endl;
             MPoint p = {tofloat[i * 4], tofloat[i*4+1], tofloat[i*4+2], uint8_t (tofloat[i*4+3] * 255)};
             points.push_back(p);
         }
+
+        delete memblock;
         return true;
     }
 }
+
+
+bool Kitti::readBinary(string filename, pcl::PointCloud<pcl::PointXYZI>::Ptr pc){
+    ifstream file(filename, std::ifstream::ate | std::ifstream::binary);
+
+    if (!file.is_open()){
+        return false;
+    } else {
+        int size = file.tellg();
+        cout << "size is " << size << endl;
+
+        char* memblock = new char[size];
+        file.seekg(0, ios::beg);
+        file.read(memblock, size);
+        file.close();
+
+        float* tofloat = (float*)memblock;
+
+        int numPoints  = size / (4 * sizeof(float));
+        cout << "number of points:" << numPoints << endl;
+        for (int i = 0; i < numPoints; i++){
+//            std::cout << "point: " << tofloat[i * 4] << " " << tofloat[i*4+1] << " " << tofloat[i*4+2] << " " <<  tofloat[i*4+3] << std::endl;
+            pcl::PointXYZI p;
+            p.x = tofloat[i * 4];
+            p.y = tofloat[i*4+1];
+            p.z = tofloat[i*4+2];
+            p.intensity = tofloat[i*4+3] * 255;
+            pc->push_back(p);
+        }
+
+        delete memblock;
+        return true;
+    }
+}
+
+
+
 
 Eigen::MatrixXf MPointsToHomoCoordinates(const std::vector<MPoint> &points){
     Eigen::MatrixXf homoPoints = Eigen::MatrixXf::Ones(4, points.size());
@@ -99,4 +138,3 @@ Eigen::MatrixXf MPointsToHomoCoordinates(const std::vector<MPoint> &points){
     }
     return homoPoints;
 }
-
