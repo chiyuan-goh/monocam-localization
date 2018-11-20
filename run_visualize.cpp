@@ -11,7 +11,7 @@ const int ROI_Y = 400;
 
 int main(){
     ifstream poseFile;
-    poseFile.open(posePath);
+    poseFile.open(Kitti::posePath);
 
     if (!poseFile){
         cerr << "Cannot open pose file" << endl;
@@ -29,7 +29,7 @@ int main(){
 
     while(hasPose){
         Eigen::MatrixXf pose(3,4);
-        hasPose = nextPose(poseFile, pose);
+        hasPose = Kitti::nextPose(poseFile, pose);
 
         int x = pose(0, 3) / cellResolution + map.cols/2;
         int y =  map.rows - pose(2,3) / cellResolution;

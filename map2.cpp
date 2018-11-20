@@ -7,10 +7,12 @@
 
 #include "util.h"
 
-
-
 using namespace Eigen;
 using namespace std;
+
+//TODO: assign the right height to each cell to see if there is improvement in the map generation.
+//TODO: instead of generating map for all frames, try to skip frame according to paper
+//TODO: dont hard code map alignment issue/check hyungjin code for references.
 
 //Don't use this
 VectorXf imageToWorldPoints(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
@@ -58,13 +60,13 @@ int main(){
     const float  minY = -50;
 
     ifstream pose_file;
-    pose_file.open(posePath);
+    pose_file.open(Kitti::posePath);
 
     if (!pose_file){
         cerr << "Cannot open pose file" << endl;
     }
 
-    MatrixXf proj = getPMatrix() ;
+    MatrixXf proj = Kitti::getPMatrix() ;
 //    cout << proj << endl;
 
     bool hasPose = true;
@@ -75,13 +77,13 @@ int main(){
 
     while (hasPose) {
         MatrixXf pose(3,4);
-        hasPose = nextPose(pose_file, pose);
+        hasPose = Kitti::nextPose(pose_file, pose);
         cout << pose << endl << "------------" << endl;
 
         int pad = 6 - to_string(frameNum).length();
         stringstream filename, orgFilename;
-        filename << labelDir << string(pad, '0') << frameNum << ".png";
-        orgFilename << imgDir << string(pad, '0') << frameNum << ".png";
+        filename << Kitti::labelDir << string(pad, '0') << frameNum << ".png";
+        orgFilename << Kitti::imgDir << string(pad, '0') << frameNum << ".png";
 
         cout << "Opening filename" << filename.str() << endl;
 
