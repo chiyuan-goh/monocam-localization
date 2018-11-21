@@ -29,27 +29,6 @@ namespace {
 //TODO: instead of generating map for all frames, try to skip frame according to paper
 //TODO: dont hard code map alignment issue/check hyungjin code for references.
 
-//Don't use this
-VectorXf imageToWorldPoints(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
-    Matrix4f pose2 = Matrix4f::Zero();
-    pose2.topLeftCorner<3, 4>() = pose;
-    pose2(3, 3) = 1;
-    MatrixXf pose3 = pose2.inverse();
-
-    Vector3f imagePoint(u, v, 1);
-
-    MatrixXf R = pose3.topLeftCorner<3,3>();
-    VectorXf t = pose3.col(3).head(3);
-
-    MatrixXf lMatrix = R.inverse() * proj.topLeftCorner<3,3>().inverse() * imagePoint;
-    MatrixXf rMatrix = R.inverse() * t;
-
-//    cout << pose(1,3) << endl;
-    float s = (HEIGHT + pose(1, 3) + rMatrix(1, 0)) / lMatrix(1, 0);
-    VectorXf realWorld = R.inverse() * (s * proj.topLeftCorner<3,3>().inverse() * imagePoint - t);
-
-    return realWorld;
-}
 
 VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
     Vector3f imagePoint(u, v, 1);
@@ -153,28 +132,26 @@ int main(){
             updateMapper(lidarMapping, patchX, patchY, cellX, cellY, point.intensity);
         }
 
-        for (int row = 0; row < shape.height; row++){
+        //get only row 300 and below
+        for (int row = 300; row < shape.height; row++){
             for (int col = 0; col < shape.width; col++){
                 uint8_t label = img.at<uchar>(row, col);
                 uint8_t grayColor = orgImg.at<uchar>(row, col);
 
-//                if (label == 24){
-//                if (row > 300 && label==24){
-                if  (row > 300){
-                    //convert u,v coordinate to world coordinate
-                    VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
+                //convert u,v coordinate to world coordinate
+                VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
 
-                    int cellX, cellY, patchX, patchY;
-                    worldPointToGrid(realWorld(0), realWorld(2), patchX, patchY, cellX, cellY);
+                int cellX, cellY, patchX, patchY;
+                worldPointToGrid(realWorld(0), realWorld(2), patchX, patchY, cellX, cellY);
 
-                    if (cellX < 0){
-                        cout << "less 0" << endl;
-                        continue;
-                    }
+                if (cellX < 0){
+                    cout << "less 0" << endl;
+                    continue;
+                }
 
-                    int blabel = (label ==24)?1:0;
-                    updateMapper(patchMapping, patchX, patchY, cellX, cellY, blabel);
-                    updateMapper(grayPatchMapping, patchX, patchY, cellX, cellY, grayColor);
+                int blabel = (label ==24)?1:0;
+                updateMapper(patchMapping, patchX, patchY, cellX, cellY, blabel);
+                updateMapper(grayPatchMapping, patchX, patchY, cellX, cellY, grayColor);
 /*
                     pair<int, int> gp = {patchX, patchY};
                     long cellId = cellY * size + cellX;
@@ -189,8 +166,6 @@ int main(){
 
                     patchMapping[gp][cellId][blabel]++;
                     grayPatchMapping[gp][cellId][grayColor]++;*/
-
-                }
             }
         }
 
@@ -268,7 +243,7 @@ int main(){
             int cellY = cellId / size;
 
             float avg = pointMap[1]*1. / (pointMap[0] + pointMap[1]);
-            mapArea.at<cv::Vec3b>(cellY, cellX)[1] = (uchar)(avg * 255);
+//            mapArea.at<cv::Vec3b>(cellY, cellX)[1] = (uchar)(avg * 255);
 
 //            int maxLabel = -1;
 //            int maxCount = -1;
