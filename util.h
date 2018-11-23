@@ -12,7 +12,7 @@
 #include <pcl/common/common_headers.h>
 
 #define HEIGHT 1.65
-#define NUM_FRAMES 30
+#define NUM_FRAMES 271
 
 using namespace Eigen;
 

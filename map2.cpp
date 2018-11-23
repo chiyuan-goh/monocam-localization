@@ -30,8 +30,8 @@ namespace {
 //TODO: dont hard code map alignment issue/check hyungjin code for references.
 
 Kitti::CamerasInfo cams;
-Matrix<float, 3, 4> tmpRHS = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
-//Matrix<float, 3, 4> tmpRHS  = cams.P2_Rect;
+//Matrix<float, 3, 4> tmpRHS = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
+Matrix<float, 3, 4> tmpRHS  = cams.P2_Rect;
 
 VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
     Vector3f imagePoint(u, v, 1);
@@ -54,11 +54,12 @@ Vector3f imageToWorldRoadPoint(float u, float v, const Matrix4f& pose){
 
     Vector3f lhs = tmpRHS.topLeftCorner<3,3>().inverse() * imagePoint;
     Vector3f rhs = tmpRHS.topLeftCorner<3,3>().inverse() * t;
-    float scale =  (0 + rhs(1))/lhs(1);
+    float scale =  (HEIGHT + rhs(1))/lhs(1);
 
-    Vector4f h = Vector4f::Ones();
-    h.head(3) = scale * lhs - rhs;
-    Vector4f roadPoint = pose * h;
+    Vector4f cam2Pt = Vector4f::Ones();
+    cam2Pt.head(3) = scale * lhs - rhs;
+    Vector4f cam0Pt = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * cams.T_Cam0Rect_Cam2Rect * cam2Pt;
+    Vector4f roadPoint = pose * cam0Pt;
     return roadPoint.head(3);
 
 }
@@ -271,7 +272,7 @@ int main(){
             int cellY = cellId / size;
 
             float avg = pointMap[1]*1. / (pointMap[0] + pointMap[1]);
-//            mapArea.at<cv::Vec3b>(cellY, cellX)[1] = (uchar)(avg * 255);
+            mapArea.at<cv::Vec3b>(cellY, cellX)[1] = (uchar)(avg * 255);
 
 //            int maxLabel = -1;
 //            int maxCount = -1;
@@ -293,7 +294,7 @@ int main(){
 
         stringstream filename, gfilename;
 
-        filename << "/source/3c_x_" << x << "_y_" << y << ".png";
+        filename << "/source/ground_3c_x_" << x << "_y_" << y << ".png";
 //        gfilename << "/home/cy/Desktop/g_x_" << x << "_y_" << y << ".png";
         cv::Mat mapAreaF = cv::Mat::zeros(ysize, size, CV_8UC1);
 //        cv::Mat gMapAreaF = cv::Mat::zeros(ysize, size, CV_8UC1);
