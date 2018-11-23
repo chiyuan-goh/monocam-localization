@@ -29,6 +29,9 @@ namespace {
 //TODO: instead of generating map for all frames, try to skip frame according to paper
 //TODO: dont hard code map alignment issue/check hyungjin code for references.
 
+Kitti::CamerasInfo cams;
+Matrix<float, 3, 4> tmpRHS = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
+//Matrix<float, 3, 4> tmpRHS  = cams.P2_Rect;
 
 VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
     Vector3f imagePoint(u, v, 1);
@@ -41,6 +44,23 @@ VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const Matri
     homoCam.head(3) = camPoint;
     Vector3f worldPoint = pose * homoCam;
     return worldPoint;
+}
+
+Vector3f imageToWorldRoadPoint(float u, float v, const Matrix4f& pose){
+    Vector3f imagePoint(u, v, 1);
+
+    //MatrixXf M3x4 = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
+    VectorXf t = tmpRHS.col(3);
+
+    Vector3f lhs = tmpRHS.topLeftCorner<3,3>().inverse() * imagePoint;
+    Vector3f rhs = tmpRHS.topLeftCorner<3,3>().inverse() * t;
+    float scale =  (0 + rhs(1))/lhs(1);
+
+    Vector4f h = Vector4f::Ones();
+    h.head(3) = scale * lhs - rhs;
+    Vector4f roadPoint = pose * h;
+    return roadPoint.head(3);
+
 }
 
 void worldPointToGrid(float x, float y, int &patchX, int &patchY, int &cellX, int &cellY){
@@ -61,7 +81,7 @@ void inline updateMapper(map<pair<int, int>, CellAssign> &mapper, int &patchX, i
     mapper[gp][cellId][key]++;
 }
 
-void filterPointCloud(IPC::Ptr src, IPC::Ptr dst, MatrixXf &pose){
+void filterPointCloud(IPC::Ptr src, IPC::Ptr dst, Matrix4f &pose){
     dst->clear();
 
     pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
@@ -70,7 +90,10 @@ void filterPointCloud(IPC::Ptr src, IPC::Ptr dst, MatrixXf &pose){
     ne.setRadiusSearch(.3);
     ne.compute(*outputNorm);
 
-    const float nTol = 0.9, heightTol = 1.35;
+    const float nTol = 0.9, heightTol = -0.30;
+
+//    for(auto &p: src->points)
+//        cout << p.y << endl;
 
     for (int i = 0; i < outputNorm->size(); ++i){
         pcl::Normal &n = outputNorm->points[i];
@@ -79,10 +102,8 @@ void filterPointCloud(IPC::Ptr src, IPC::Ptr dst, MatrixXf &pose){
         }
     }
 
-    Matrix4f P4x4 = Matrix4f::Identity();
-    P4x4.topLeftCorner<3,4>() = pose;
-
-    pcl::transformPointCloud(*dst, *dst, P4x4);
+    cout << "final: " << dst->size() << endl;
+    pcl::transformPointCloud(*dst, *dst, pose);
 }
 
 int main(){
@@ -104,8 +125,12 @@ int main(){
     map<pair<int, int>, CellAssign> patchMapping, grayPatchMapping, lidarMapping;
 
     while (hasPose) {
-        MatrixXf pose(3,4);
-        hasPose = Kitti::nextPose(pose_file, pose);
+        Matrix4f pose = Matrix4f::Zero();
+        MatrixXf tmp(3, 4);
+        hasPose = Kitti::nextPose(pose_file, tmp);
+        pose.topLeftCorner<3,4>() = tmp;
+        //now ground truth pose is in terms of road.
+        pose = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * pose;
 
         int pad = 6 - to_string(frameNum).length();
         stringstream filename, orgFilename, veloFilename;
@@ -118,10 +143,12 @@ int main(){
         cv::Mat img = cv::imread(filename.str(), CV_LOAD_IMAGE_GRAYSCALE);
         cv::Mat orgImg = cv::imread(orgFilename.str(), CV_LOAD_IMAGE_GRAYSCALE);
         cv::Size shape = img.size();
+
         IPC::Ptr pc(new IPC()), filteredPC(new IPC());
         Kitti::readBinary(veloFilename.str(), pc);
-//        cout << "number of lidar " << pc->size() << endl;
-        pcl::transformPointCloud(*pc, *pc, Kitti::getVelodyneToCam());
+
+//        pcl::transformPointCloud(*pc, *pc, cams.R0_Rect * cams.T_Cam0Unrect_Velodyne);
+        pcl::transformPointCloud(*pc, *pc, cams.T_Cam0Unrect_Road.inverse() * cams.T_Cam0Unrect_Velodyne);
         filterPointCloud(pc, filteredPC, pose);
 
         for (auto &point: filteredPC->points){
@@ -139,10 +166,11 @@ int main(){
                 uint8_t grayColor = orgImg.at<uchar>(row, col);
 
                 //convert u,v coordinate to world coordinate
-                VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
+                //VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
+                Vector3f roadPoint = imageToWorldRoadPoint(col, row, pose);
 
                 int cellX, cellY, patchX, patchY;
-                worldPointToGrid(realWorld(0), realWorld(2), patchX, patchY, cellX, cellY);
+                worldPointToGrid(roadPoint(0), roadPoint(2), patchX, patchY, cellX, cellY);
 
                 if (cellX < 0){
                     cout << "less 0" << endl;
