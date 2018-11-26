@@ -26,6 +26,11 @@ struct MPoint{
 
 
 Eigen::MatrixXf MPointsToHomoCoordinates(const std::vector<MPoint> &points);
+void inline mat2xyh(MatrixXf& pose, float &x, float &y, float &heading){
+    heading = atan2(-pose(2, 0),  sqrt(pose(1, 0) * pose(1, 0) +  pose(0,0) * pose(0,0)) );
+    x = pose(0, 3);
+    y = pose(2, 3);
+};
 
 
 namespace Kitti {

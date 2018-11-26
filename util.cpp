@@ -65,6 +65,7 @@ Kitti::CamerasInfo::CamerasInfo() {
 }
 
 
+//deprecated
 Eigen::MatrixXf Kitti::getPMatrix(){
     Eigen::MatrixXf P(3, 4);
     P << 7.070912000000e+02, 0.000000000000e+00,  6.018873000000e+02, 4.688783000000e+01,
@@ -73,6 +74,7 @@ Eigen::MatrixXf Kitti::getPMatrix(){
     return P;
 }
 
+//deprecated
 Eigen::MatrixXf Kitti::getVelodyneToCam(){
     Eigen::MatrixXf Tr(4, 4);
     Tr << -1.857739385241e-03, -9.999659513510e-01, -8.039975204516e-03, -4.784029760483e-03,
@@ -195,3 +197,4 @@ Eigen::MatrixXf MPointsToHomoCoordinates(const std::vector<MPoint> &points){
     }
     return homoPoints;
 }
+

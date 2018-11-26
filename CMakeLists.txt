@@ -16,7 +16,7 @@ add_definitions(${PCL_DEFINITIONS} )
 
 add_executable(mapgen main.cpp)
 add_executable(mk_map2 map2.cpp util.cpp)
-add_executable(localize run_visualize.cpp util.cpp)
+add_executable(localize run_visualize.cpp util.cpp ParticleFilter.cpp)
 add_executable(test1 test.cpp util.cpp)
 
 target_link_libraries(mapgen ${OpenCV_LIBS})
