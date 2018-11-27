@@ -30,7 +30,6 @@ cv::Mat poseOnMap(cv::Mat& map, MatrixXf &gt, ParticleFilter &mcl){
 
     cv::circle(clone, gtPoint, pointSize, gtColor, 2);
     cv::line(clone, gtPoint, cv::Point(lx, ly), gtColor, 1);
-    cout << gtPoint.x << " " << gtPoint.y << " " << lx << " " << ly << endl;
 
     for (auto &pose : mcl.particles){
         float px, py, heading;
@@ -81,13 +80,27 @@ int main(){
     int frame = 0;
     ParticleFilter mcl(20);
 
+    Matrix4f curPose, prevPose;
+
     while(hasPose){
         Eigen::MatrixXf pose(3,4);
         hasPose = Kitti::nextPose(poseFile, pose);
+        Matrix4f pose4  = Matrix4f::Identity();
+        pose4.topLeftCorner<3,4>() = pose;
 
         if (frame == 0){
             //first pose, initialMCL
-            mcl.init(pose);
+            mcl.init(pose4);
+            curPose = pose4;
+        } else {
+            prevPose = curPose;
+            curPose = pose4;
+            mcl.predict(prevPose, curPose);
+        }
+
+        if (mcl.weightsDegenerate()){
+            cout << "low effective sample size! performing resampling..." << endl;
+            mcl.resample();
         }
 
         cv::Mat visualize = poseOnMap(map, pose, mcl);

@@ -16,9 +16,12 @@ struct ParticleFilter {
 
     ParticleFilter(int n);
 
-    void init(Eigen::MatrixXf& initialPose);
+    void init(Eigen::Matrix4f& initialPose);
     void update(cv::Mat& img);
-    void predict(Eigen::Matrix4f &prevPose);
+    void resample();
+    bool weightsDegenerate();
+    void predict(Eigen::Matrix4f &prevPose, Eigen::Matrix4f &curPose,
+                 float a1=0.05, float a2 = 0.005, float a3 = 0.005, float a4 = 0.05);
 };
 
 
