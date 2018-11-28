@@ -29,9 +29,9 @@ namespace {
 //TODO: instead of generating map for all frames, try to skip frame according to paper
 //TODO: dont hard code map alignment issue/check hyungjin code for references.
 
-Kitti::CamerasInfo cams;
-//Matrix<float, 3, 4> tmpRHS = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
-Matrix<float, 3, 4> tmpRHS  = cams.P2_Rect;
+//Kitti::CamerasInfo cams;
+////Matrix<float, 3, 4> tmpRHS = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
+//Matrix<float, 3, 4> tmpRHS  = cams.P2_Rect;
 
 VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const MatrixXf& proj){
     Vector3f imagePoint(u, v, 1);
@@ -46,31 +46,7 @@ VectorXf imageToWorldPoints2(float u, float v, const MatrixXf& pose, const Matri
     return worldPoint;
 }
 
-Vector3f imageToWorldRoadPoint(float u, float v, const Matrix4f& pose){
-    Vector3f imagePoint(u, v, 1);
 
-    //MatrixXf M3x4 = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
-    VectorXf t = tmpRHS.col(3);
-
-    Vector3f lhs = tmpRHS.topLeftCorner<3,3>().inverse() * imagePoint;
-    Vector3f rhs = tmpRHS.topLeftCorner<3,3>().inverse() * t;
-    float scale =  (HEIGHT + rhs(1))/lhs(1);
-
-    Vector4f cam2Pt = Vector4f::Ones();
-    cam2Pt.head(3) = scale * lhs - rhs;
-    Vector4f cam0Pt = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * cams.T_Cam0Rect_Cam2Rect * cam2Pt;
-    Vector4f roadPoint = pose * cam0Pt;
-    return roadPoint.head(3);
-
-}
-
-void worldPointToGrid(float x, float y, int &patchX, int &patchY, int &cellX, int &cellY){
-    patchX = x / (resolution * size);
-    patchY = y / (resolution * ysize);
-    cellX = fmod(x, resolution * size) / resolution;
-    cellY = fmod(y, resolution * ysize) / resolution;
-    cellX =(500 + cellX) % size;
-}
 
 void inline updateMapper(map<pair<int, int>, CellAssign> &mapper, int &patchX, int &patchY, int &cellX, int &cellY, int key){
     pair<int, int> gp = {patchX, patchY};
@@ -124,6 +100,7 @@ int main(){
     int frameNum = 0;
 
     map<pair<int, int>, CellAssign> patchMapping, grayPatchMapping, lidarMapping;
+    Kitti::CamerasInfo cams;
 
     while (hasPose) {
         Matrix4f pose = Matrix4f::Zero();
@@ -168,7 +145,7 @@ int main(){
 
                 //convert u,v coordinate to world coordinate
                 //VectorXf realWorld = imageToWorldPoints2(col, row, pose, proj);
-                Vector3f roadPoint = imageToWorldRoadPoint(col, row, pose);
+                Vector3f roadPoint = imageToWorldRoadPoint(col, row, pose, cams);
 
                 int cellX, cellY, patchX, patchY;
                 worldPointToGrid(roadPoint(0), roadPoint(2), patchX, patchY, cellX, cellY);

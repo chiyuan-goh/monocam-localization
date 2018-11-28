@@ -79,10 +79,17 @@ int main(){
 
     int frame = 0;
     ParticleFilter mcl(20);
+    mcl.map = generateLikelihoodField(map);
 
     Matrix4f curPose, prevPose;
 
     while(hasPose){
+        int pad = 6 - to_string(frame).length();
+        stringstream filename, orgFilename, veloFilename;
+        filename << Kitti::labelDir << string(pad, '0') << frame << ".png";
+
+        cv::Mat measurementImg = cv::imread(filename.str(), CV_LOAD_IMAGE_GRAYSCALE);
+
         Eigen::MatrixXf pose(3,4);
         hasPose = Kitti::nextPose(poseFile, pose);
         Matrix4f pose4  = Matrix4f::Identity();
@@ -96,6 +103,7 @@ int main(){
             prevPose = curPose;
             curPose = pose4;
             mcl.predict(prevPose, curPose);
+            mcl.update(measurementImg);
         }
 
         if (mcl.weightsDegenerate()){

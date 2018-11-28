@@ -9,9 +9,13 @@
 #include <Eigen/Dense>
 #include <vector>
 
+
+cv::Mat generateLikelihoodField(cv::Mat &map);
+
 struct ParticleFilter {
     std::vector<Eigen::MatrixXf> particles;
-    std::vector<float> weights;
+    std::vector<double> weights;
+    cv::Mat map;
     int nparticles;
 
     ParticleFilter(int n);

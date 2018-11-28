@@ -5,6 +5,7 @@ find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
 
 include_directories("/usr/local/include/eigen3/")
+include_directories(/source/nanoflann/include)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 link_directories(/usr/local/lib)

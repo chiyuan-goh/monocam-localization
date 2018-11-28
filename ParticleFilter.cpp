@@ -4,23 +4,77 @@
 
 #include "ParticleFilter.h"
 #include "util.h"
+#include "KDTreeVectorOfVectorsAdaptor.h"
 
+#include <nanoflann.hpp>
 #include <random>
 #include <iostream>
+#include <vector>
 
 using namespace std;
 using namespace Eigen;
 
-void mat2xyzrph(Matrix4f mat, float &x, float &y, float &z, float &r, float &p, float &h){
-
-}
-
 ParticleFilter::ParticleFilter(int n):nparticles(n){
 };
 
+cv::Mat generateLikelihoodField(cv::Mat &map){
+    cout << "generating likeligood field" << endl;
+    const float pixStd = 8.;
+
+
+    typedef vector<vector<double> > VOV_t;
+    typedef KDTreeVectorOfVectorsAdaptor<VOV_t, double, 2, nanoflann::metric_L2_Simple> my_kd_tree_t;
+
+    const uint8_t thres = 150;
+    VOV_t coordinates;
+    vector<vector<double> > allQuery;
+
+    for (int r = 0; r < map.rows; r++){
+        for (int c = 0; c < map.cols; c++){
+            if (map.at<cv::Vec3b>(r, c)[1] > thres){
+                vector<double> rc = {1. * r, 1. * c};
+                coordinates.push_back(rc);
+            }
+            vector<double> rc2 = {r * 1. ,c * 1.};
+            allQuery.push_back(rc2);
+        }
+    }
+
+    size_t n = coordinates.size();
+    my_kd_tree_t matIndex(2, coordinates, 10);
+    matIndex.index->buildIndex();
+
+    const size_t numResults = 1;
+    vector<size_t> ret_indexes(numResults);
+    vector<double> out_dists_sqr(numResults);
+//    nanoflann::KNNResultSet<double> resultSet(numResults);
+//    resultSet.init(&ret_indexes[0], &out_dists_sqr[0]);
+
+    cv::Mat lField = cv::Mat::zeros(map.rows, map.cols, CV_8UC1);
+    int size_counted = 0;
+
+    for (auto &queryPoint: allQuery){
+        matIndex.query(&queryPoint[0], 1, &ret_indexes[0], &out_dists_sqr[0]);
+//        cout << "ret_index["<<0<<"]=" << ret_indexes[0] << "x:" << coordinates[ret_indexes[0]][0] << " y:" <<
+//        coordinates[ret_indexes[0]][1]  << " out_dist_sqr=" << out_dists_sqr[0] << std::endl;
+
+        if (size_counted++ == 1000){
+            cout << "counted " << size_counted << endl;
+        }
+
+        float dist = out_dists_sqr[0];
+        float p  = exp( (-dist * dist) / (2 * pixStd * pixStd));
+        lField.at<uchar>(queryPoint[0], queryPoint[1]) = (uchar) (p * 255);
+    }
+
+    cout << "completed likelihood field..." << endl;
+    cv::imwrite("/source/likelihood_field.png", lField);
+    return lField;
+}
+
 void ParticleFilter::init(Eigen::Matrix4f &initialPose) {
     particles = std::vector<MatrixXf>(nparticles);
-    weights = std::vector<float>(nparticles);
+    weights = std::vector<double>(nparticles);
 
     float xyBounds = 1.5;
     float yawBound = 15. * M_PI / 180.;
@@ -54,7 +108,44 @@ void ParticleFilter::init(Eigen::Matrix4f &initialPose) {
 }
 
 void ParticleFilter::update(cv::Mat &img) {
+    const int lookAhead = 250;
+    Kitti::CamerasInfo cams;
+    vector<long> xy;
 
+    for (int r = lookAhead; r < img.rows; r++){
+        for (int c = 0; c < img.cols; c++){
+            if (img.at<uchar>(r, c) == 24){
+                xy.push_back(r * img.cols + c);
+            }
+        }
+    }
+
+    for (int pidx = 0; pidx < particles.size(); pidx++){
+        double prob = 1.;
+        double lp = .0001;
+        Matrix4f pPose = (Matrix4f)particles[pidx];
+
+        for (auto &l: xy){
+            float v = l / img.cols;
+            float u = l % img.rows;
+            Vector3f mapPoint = imageToWorldRoadPoint(u, v, pPose, cams);
+            int patchX, patchY, cellX, cellY;
+            worldPointToGrid(mapPoint(0), mapPoint(2), patchX, patchY, cellX, cellY);
+
+            if (patchX != 0 || patchY != 0){
+                prob *= lp;
+            }
+            else if (u < 0 || u >= map.cols || v < 0 || v >= map.rows){
+                prob *= lp;
+            }
+            else {
+                prob *= map.at<uchar>(u, v) / 255. +  1./ ((img.rows - lookAhead) * img.cols);
+            }
+        }
+
+        cout << "setting particle " << pidx << ": " << prob << endl;
+        weights[pidx] *= prob;
+    }
 }
 
 void ParticleFilter::predict(Matrix4f &prevPose, Matrix4f &curPose,
