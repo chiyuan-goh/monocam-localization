@@ -78,10 +78,12 @@ int main(){
     cv::flip(map, map, 0);
 
     int frame = 0;
-    ParticleFilter mcl(20);
+    ParticleFilter mcl(2);
+//    ParticleFilter mcl(100);
     mcl.map = generateLikelihoodField(map);
 
     Matrix4f curPose, prevPose;
+    Kitti::CamerasInfo cams;
 
     while(hasPose){
         int pad = 6 - to_string(frame).length();
@@ -94,11 +96,13 @@ int main(){
         hasPose = Kitti::nextPose(poseFile, pose);
         Matrix4f pose4  = Matrix4f::Identity();
         pose4.topLeftCorner<3,4>() = pose;
+        pose4 = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * pose4;
 
         if (frame == 0){
             //first pose, initialMCL
             mcl.init(pose4);
             curPose = pose4;
+            mcl.update(measurementImg);
         } else {
             prevPose = curPose;
             curPose = pose4;

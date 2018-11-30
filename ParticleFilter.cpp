@@ -88,64 +88,90 @@ void ParticleFilter::init(Eigen::Matrix4f &initialPose) {
     Matrix4f hPose = initialPose;
 
     for (int i = 0; i < weights.size(); i++){
-        weights[i] = 1.;
+        if (i == 0){
+            particles[i] = hPose;
+            weights[i] = 1.;
+        }
+        else {
+            weights[i] = 1.;
 
-        float xDiff = posDis(gen);
-        float zDiff = posDis(gen);
-        float yawDiff = headingDis(gen);
-        cout << "Initialized particle with " << xDiff << " " << zDiff << " " << yawDiff * 180/M_PI << endl;
+            float xDiff = posDis(gen);
+            float zDiff = posDis(gen);
+            float yawDiff = headingDis(gen);
+            cout << "Initialized particle with " << xDiff << " " << zDiff << " " << yawDiff * 180 / M_PI << endl;
 
-        MatrixXf particle = Matrix4f::Identity(4,4);
-        particle(0, 3) = xDiff;
-        particle(2, 3) = zDiff;
+            MatrixXf particle = Matrix4f::Identity(4, 4);
+            particle(0, 3) = 2;//xDiff;
+            particle(2, 3) = 2;//zDiff;
 
-        AngleAxisf m = AngleAxisf(yawDiff, Vector3f::UnitY());
-        particle.topLeftCorner<3,3>() = m.matrix();
-        particle = particle * hPose;
+            AngleAxisf m = AngleAxisf(45 * M_PI/180., Vector3f::UnitY());
+//            AngleAxisf m = AngleAxisf(yawDiff, Vector3f::UnitY());
+            particle.topLeftCorner<3, 3>() = m.matrix();
+            particle = particle * hPose;
 
-        particles[i] = particle;
+            particles[i] = particle;
+        }
     }
 }
 
 void ParticleFilter::update(cv::Mat &img) {
-    const int lookAhead = 250;
+    const int lookAhead = 50;
     Kitti::CamerasInfo cams;
     vector<long> xy;
 
-    for (int r = lookAhead; r < img.rows; r++){
-        for (int c = 0; c < img.cols; c++){
-            if (img.at<uchar>(r, c) == 24){
-                xy.push_back(r * img.cols + c);
+    for (int v = lookAhead; v < img.rows; v++){
+        for (int u = 0; u < img.cols; u++){
+            if (img.at<uchar>(v, u) == 24){
+                xy.push_back(v * img.cols + u);
             }
         }
     }
+
+    MatrixXi compare = MatrixXi::Zero(1500, 2);
 
     for (int pidx = 0; pidx < particles.size(); pidx++){
         double prob = 1.;
         double lp = .0001;
         Matrix4f pPose = (Matrix4f)particles[pidx];
+        int t1c = 0, t2c = 0, t3c = 0;
+        int counter = 0;
 
+        cout << pPose << endl;
         for (auto &l: xy){
             float v = l / img.cols;
-            float u = l % img.rows;
+            float u = l % img.cols;
             Vector3f mapPoint = imageToWorldRoadPoint(u, v, pPose, cams);
             int patchX, patchY, cellX, cellY;
             worldPointToGrid(mapPoint(0), mapPoint(2), patchX, patchY, cellX, cellY);
 
             if (patchX != 0 || patchY != 0){
-                prob *= lp;
+                prob += log(lp);
+                t1c++;
+                cout << mapPoint << endl;
+                Vector3f mapPoint = imageToWorldRoadPoint(u, v, pPose, cams);
             }
-            else if (u < 0 || u >= map.cols || v < 0 || v >= map.rows){
-                prob *= lp;
+            else if (cellX < 0 || cellX >= map.cols || cellY < 0 || cellY >= map.rows){
+                prob += log(lp);
+                t2c++;
             }
             else {
-                prob *= map.at<uchar>(u, v) / 255. +  1./ ((img.rows - lookAhead) * img.cols);
+                cout << mapPoint << endl;
+                prob += log(map.at<uchar>(cellY, cellX) / 255. +  1./ ((img.rows - lookAhead) * img.cols));
+                t3c++;
             }
+
+            if (counter < 1500)
+            compare(counter++, pidx) = cellX * 500 + cellY;
+//            cout << prob << endl;
+
         }
 
+        cout << "t1:" << t1c << " t2:" << t2c << " t3:" << t3c << endl;
         cout << "setting particle " << pidx << ": " << prob << endl;
-        weights[pidx] *= prob;
+        weights[pidx] += prob;
     }
+
+//    cout << compare << endl;
 }
 
 void ParticleFilter::predict(Matrix4f &prevPose, Matrix4f &curPose,
@@ -206,15 +232,24 @@ void ParticleFilter::resample() {
 
     vector<MatrixXf> tmp;
 
-    double c = weights[0];
+    double maxVal = *std::max_element(weights.begin(), weights.end());
+    vector<double> wtmp;
+    for (auto &w: weights){
+        wtmp.push_back(exp(w - maxVal));
+    }
+
+    double total = std::accumulate(wtmp.begin(), wtmp.end(), 0.);
+
+
+    double c = wtmp[0]/total;
     double r = rand(gen);
     int i = 0;
 
-    for (int m = 0; m < weights.size(); m++){
-        double u = r + m / weights.size();
+    for (int m = 0; m < wtmp.size(); m++){
+        double u = r + m / wtmp.size();
         while (u > c){
             i++;
-            c += weights[i];
+            c += wtmp[i]/total;
         }
         tmp.push_back(particles[i]);
     }

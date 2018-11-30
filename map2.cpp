@@ -103,11 +103,11 @@ int main(){
     Kitti::CamerasInfo cams;
 
     while (hasPose) {
-        Matrix4f pose = Matrix4f::Zero();
+        Matrix4f pose = Matrix4f::Ones();
         MatrixXf tmp(3, 4);
         hasPose = Kitti::nextPose(pose_file, tmp);
         pose.topLeftCorner<3,4>() = tmp;
-        //now ground truth pose is in terms of road.
+        //now ground truth pose is in road coordinate frame.
         pose = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * pose;
 
         int pad = 6 - to_string(frameNum).length();

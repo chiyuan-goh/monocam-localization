@@ -23,7 +23,7 @@ column (for R0_rect only).
 
 Kitti::CamerasInfo::CamerasInfo() {
     height = HEIGHT;
-    const float pitch = 4 * M_PI / 180;
+    const float pitch = 4 * M_PI / 180.;
 
     P2_Rect = MatrixXf(3, 4);
     P2_Rect << 7.070912000000e+02, 0.000000000000e+00,  6.018873000000e+02, 4.688783000000e+01,
@@ -170,7 +170,7 @@ bool Kitti::readBinary(string filename, pcl::PointCloud<pcl::PointXYZI>::Ptr pc)
         float* tofloat = (float*)memblock;
 
         int numPoints  = size / (4 * sizeof(float));
-        cout << "number of points:" << numPoints << endl;
+       std::cout << "number of points:" << numPoints << std::endl;
         for (int i = 0; i < numPoints; i++){
 //            std::cout << "point: " << tofloat[i * 4] << " " << tofloat[i*4+1] << " " << tofloat[i*4+2] << " " <<  tofloat[i*4+3] << std::endl;
             pcl::PointXYZI p;

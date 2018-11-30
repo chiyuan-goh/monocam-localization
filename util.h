@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 #include <fstream>
 #include <vector>
+#include <iostream>
 #include <pcl/common/common_headers.h>
 
 #define HEIGHT 1.65
@@ -66,20 +67,38 @@ namespace Kitti {
 };
 
 Vector3f inline imageToWorldRoadPoint(float u, float v, const Matrix4f& pose, Kitti::CamerasInfo &cams){
+//    Vector3f imagePoint(u, v, 1);
+//
+//    //MatrixXf M3x4 = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
+//    VectorXf t = cams.tmpRHS.col(3);
+//
+//    Vector3f lhs = cams.tmpRHS.topLeftCorner<3,3>().inverse() * imagePoint;
+//    Vector3f rhs = cams.tmpRHS.topLeftCorner<3,3>().inverse() * t;
+//    //TODO: realized why this seems to work, but is actually not true. becos i have assume y of the 3d point is HEIGHT, but in fact it may not be as camera has pitch. I think may need to go back to my original formula incorporating the transform to find the real scale, although earlier experiment doesnt work.
+//    float scale =  (HEIGHT + rhs(1))/lhs(1);
+//
+//    Vector4f cam2Pt = Vector4f::Ones();
+//    cam2Pt.head(3) = scale * lhs - rhs;
+//    Vector4f cam0Pt = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * cams.T_Cam0Rect_Cam2Rect * cam2Pt;
+//    std::cout << "cam2:\n" << cam2Pt << std::endl;
+//    std::cout << "cam0:\n" << cam0Pt << std::endl;
+//    Vector4f roadPoint = pose * cam0Pt;
+//    std::cout << "road:\n" << roadPoint << std::endl;
+//    std::cout << "word:\n" << pose << "\n-----" << std::endl;
+//
+//    return roadPoint.head(3);
+
     Vector3f imagePoint(u, v, 1);
+    Matrix3f Kinv = cams.K2.inverse();
+    Vector3f L = Kinv * imagePoint;
+    double s =  HEIGHT / L(1);
 
-    //MatrixXf M3x4 = cams.P2_Rect * cams.R0_Rect * cams.T_Cam0Unrect_Road;
-    VectorXf t = cams.tmpRHS.col(3);
-
-    Vector3f lhs = cams.tmpRHS.topLeftCorner<3,3>().inverse() * imagePoint;
-    Vector3f rhs = cams.tmpRHS.topLeftCorner<3,3>().inverse() * t;
-    float scale =  (HEIGHT + rhs(1))/lhs(1);
-
-    Vector4f cam2Pt = Vector4f::Ones();
-    cam2Pt.head(3) = scale * lhs - rhs;
-    Vector4f cam0Pt = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * cams.T_Cam0Rect_Cam2Rect * cam2Pt;
-    Vector4f roadPoint = pose * cam0Pt;
-    return roadPoint.head(3);
+    Vector3f camPoint = s * Kinv * imagePoint;
+    Vector4f homoCam  = Vector4f::Ones();
+    homoCam.head(3) = camPoint;
+    Vector4f cam0Pt = cams.T_Cam0Unrect_Road.inverse() * cams.R0_Rect.inverse() * cams.T_Cam0Rect_Cam2Rect * homoCam;
+    Vector4f worldPoint = pose * homoCam;
+    return worldPoint.head(3);
 }
 
 void inline worldPointToGrid(float x, float y, int &patchX, int &patchY, int &cellX, int &cellY){
